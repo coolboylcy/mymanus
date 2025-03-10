@@ -1,12 +1,11 @@
-from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 import uvicorn
 import uuid
 import json
-import asyncio
-from typing import Dict, Optional
+from typing import Dict
 import os
 from pathlib import Path
 
@@ -29,7 +28,7 @@ try:
 except Exception as e:
     logger.error(f"Error mounting static files: {str(e)}")
 
-# In-memory storage
+# In-memory storage (note: this will reset on each function invocation)
 tasks: Dict[str, Task] = {}
 task_events: Dict[str, list] = {}
 
@@ -41,7 +40,7 @@ async def get_index(request: Request):
         logger.error(f"Error rendering index: {str(e)}")
         return JSONResponse(
             status_code=500,
-            content={"error": "Internal server error"}
+            content={"error": "Error rendering index page"}
         )
 
 @app.get("/tasks")
@@ -68,13 +67,32 @@ async def create_task(request: Request):
         
         task_id = str(uuid.uuid4())
         task = Task(id=task_id, prompt=prompt, status=TaskStatus.PENDING)
-        tasks[task_id] = task
-        task_events[task_id] = []
         
-        # Process task in background
-        background_tasks = asyncio.create_task(process_task(task))
-        
-        return task
+        # Process task immediately in serverless environment
+        try:
+            agent = ToolCallAgent()
+            task.status = TaskStatus.RUNNING
+            
+            result = await agent.run(prompt)
+            
+            task.status = TaskStatus.COMPLETED
+            return {
+                "id": task_id,
+                "status": TaskStatus.COMPLETED,
+                "result": result
+            }
+            
+        except Exception as e:
+            logger.error(f"Task processing error: {str(e)}")
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "id": task_id,
+                    "status": TaskStatus.FAILED,
+                    "error": "Task processing failed"
+                }
+            )
+            
     except Exception as e:
         logger.error(f"Error creating task: {str(e)}")
         return JSONResponse(
@@ -115,41 +133,6 @@ async def get_task_events(task_id: str):
             status_code=500,
             content={"error": "Internal server error"}
         )
-
-async def process_task(task: Task):
-    try:
-        task.status = TaskStatus.RUNNING
-        tasks[task.id] = task
-        
-        agent = ToolCallAgent()
-        
-        event = TaskEvent(
-            type=TaskEventType.THINKING,
-            content="开始处理任务..."
-        )
-        task_events[task.id].append(event)
-        
-        result = await agent.run(task.prompt)
-        
-        event = TaskEvent(
-            type=TaskEventType.COMPLETE,
-            content=result
-        )
-        task_events[task.id].append(event)
-        
-        task.status = TaskStatus.COMPLETED
-        tasks[task.id] = task
-        
-    except Exception as e:
-        logger.error(f"Error processing task: {str(e)}")
-        event = TaskEvent(
-            type=TaskEventType.ERROR,
-            content=f"处理任务时出错: {str(e)}"
-        )
-        task_events[task.id].append(event)
-        
-        task.status = TaskStatus.FAILED
-        tasks[task.id] = task
 
 # Health check endpoint
 @app.get("/health")
