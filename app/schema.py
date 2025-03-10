@@ -133,3 +133,29 @@ class Memory(BaseModel):
     def to_dict_list(self) -> List[dict]:
         """Convert messages to list of dicts"""
         return [msg.to_dict() for msg in self.messages]
+
+
+class TaskStatus(str, Enum):
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class TaskEventType(str, Enum):
+    THINKING = "thinking"
+    TOOL = "tool"
+    COMPLETE = "complete"
+    ERROR = "error"
+
+
+class TaskEvent(BaseModel):
+    type: TaskEventType
+    content: str
+
+
+class Task(BaseModel):
+    id: str
+    prompt: str
+    status: TaskStatus
+    events: List[TaskEvent] = []
