@@ -3,7 +3,10 @@
   "builds": [
     {
       "src": "app.py",
-      "use": "@vercel/python"
+      "use": "@vercel/python",
+      "config": {
+        "runtime": "python3.9"
+      }
     }
   ],
   "routes": [
@@ -13,6 +16,8 @@
     }
   ],
   "env": {
-    "PYTHON_VERSION": "3.9"
+    "PYTHON_VERSION": "3.9",
+    "OPENAI_API_KEY": "sk-b225609809eb45da981394d494dafe3d",
+    "OPENAI_API_BASE": "https://api.deepseek.com/v1"
   }
 } 
